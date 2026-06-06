@@ -2,10 +2,14 @@ from django.views.generic import TemplateView
 from django.views import View
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.http import JsonResponse
+from django.views.decorators.csrf import csrf_exempt
+from django.utils.decorators import method_decorator
+from django.contrib.auth import authenticate
 from .models import PredictionQuery
 from .services import WeatherService
 from datetime import datetime
 import json
+import base64
 
 class DashboardView(LoginRequiredMixin, TemplateView):
     """
@@ -20,13 +24,41 @@ class DashboardView(LoginRequiredMixin, TemplateView):
         context['history'] = PredictionQuery.objects.filter(user=self.request.user)
         return context
 
-class PredictionAPIView(LoginRequiredMixin, View):
+@method_decorator(csrf_exempt, name='dispatch')
+class PredictionAPIView(View):
     """
     Class-based view API endpoint for fetching rain forecasts.
-    Validates input parameters, queries Open-Meteo, saves records in database, 
+    Supports HTTP Basic Auth so it can be called directly from Postman.
+    Validates input parameters, queries Open-Meteo, saves records in database,
     and returns a formatted JSON response.
     """
+
+    def _authenticate(self, request):
+        """Authenticate via session (browser) or HTTP Basic Auth (Postman/API)."""
+        # Already authenticated via session
+        if request.user.is_authenticated:
+            return request.user
+        # Try HTTP Basic Auth
+        auth_header = request.META.get('HTTP_AUTHORIZATION', '')
+        if auth_header.startswith('Basic '):
+            try:
+                decoded = base64.b64decode(auth_header[6:]).decode('utf-8')
+                username, password = decoded.split(':', 1)
+                user = authenticate(request, username=username, password=password)
+                return user
+            except Exception:
+                return None
+        return None
+
     def post(self, request, *args, **kwargs):
+        # Authenticate the request
+        user = self._authenticate(request)
+        if not user:
+            return JsonResponse(
+                {'success': False, 'error': 'Authentication required. Provide valid Basic Auth credentials.'},
+                status=401,
+                headers={'WWW-Authenticate': 'Basic realm="RainCast API"'}
+            )
         try:
             # Handle both JSON payloads and standard POST form data
             if request.content_type == 'application/json':
@@ -86,7 +118,7 @@ class PredictionAPIView(LoginRequiredMixin, View):
 
             # 3. Persist prediction log to the database
             query_record = PredictionQuery.objects.create(
-                user=request.user,
+                user=user,
                 location=resolved_name,
                 start_date=start_date,
                 end_date=end_date,
