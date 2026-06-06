@@ -1,0 +1,225 @@
+{% extends 'base.html' %}
+
+{% block title %}Dashboard - RainCast{% endblock %}
+
+{% block content %}
+<div class="dashboard-grid">
+    <!-- Search Form Card -->
+    <div class="card search-card">
+        <h3>Predict Rain</h3>
+        <p class="card-subtitle">Enter location name and dates to forecast precipitation</p>
+        
+        <div id="errorAlert" class="alert alert-error hidden"></div>
+        
+        <form id="predictionForm" method="post" class="dashboard-form">
+            {% csrf_token %}
+            
+            <div class="form-group">
+                <label for="location">Location / City</label>
+                <input type="text" name="location" id="location" required placeholder="e.g., London, Tokyo, Paris" class="form-input">
+            </div>
+            
+            <div class="form-grid">
+                <div class="form-group">
+                    <label for="startDate">Start Date</label>
+                    <input type="date" name="start_date" id="startDate" required class="form-input">
+                </div>
+                
+                <div class="form-group">
+                    <label for="endDate">End Date</label>
+                    <input type="date" name="end_date" id="endDate" required class="form-input">
+                </div>
+            </div>
+            
+            <button type="submit" class="btn btn-primary btn-block">Get Rain Prediction</button>
+        </form>
+    </div>
+
+    <!-- Results Section Card -->
+    <div class="card result-card">
+        <h3>Prediction Results</h3>
+        <div id="loadingState" class="loading-container hidden">
+            <div class="spinner"></div>
+            <p>Analyzing meteorological data...</p>
+        </div>
+        
+        <div id="initialState" class="initial-state">
+            <div class="icon-placeholder">🌍</div>
+            <p>Select a location and date range to view predictions</p>
+        </div>
+
+        <div id="resultsSection" class="results-container hidden">
+            <div class="result-header">
+                <h4 id="resLocation">London, GB</h4>
+                <span id="resStatus" class="badge">Rain Predicted</span>
+            </div>
+            
+            <div class="result-details">
+                <div class="detail-item">
+                    <span class="detail-label">Coordinates</span>
+                    <span id="resCoords" class="detail-value">51.5085°, -0.1257°</span>
+                </div>
+                <div class="detail-item">
+                    <span class="detail-label">Forecast Period</span>
+                    <span id="resDates" class="detail-value">2026-06-06 to 2026-06-09</span>
+                </div>
+                <div class="detail-item">
+                    <span class="detail-label">Total Expected Rain</span>
+                    <span id="resRainSum" class="detail-value">12.5 mm</span>
+                </div>
+                <div class="detail-item">
+                    <span class="detail-label">Max Rain Probability</span>
+                    <span id="resProb" class="detail-value">84%</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- History Log Section -->
+<div class="card history-card">
+    <h3>Search History Log</h3>
+    <p class="card-subtitle">Real-time database tracking of all prediction requests</p>
+    
+    <div class="table-container">
+        <table class="history-table">
+            <thead>
+                <tr>
+                    <th>Location</th>
+                    <th>Coordinates</th>
+                    <th>Date Range</th>
+                    <th>Total Rain</th>
+                    <th>Max Probability</th>
+                    <th>Rain Status</th>
+                    <th>Requested At</th>
+                </tr>
+            </thead>
+            <tbody id="historyBody">
+                {% for item in history %}
+                    <tr>
+                        <td>{{ item.location }}</td>
+                        <td>{{ item.latitude|floatformat:4 }}°, {{ item.longitude|floatformat:4 }}°</td>
+                        <td>{{ item.start_date|date:"Y-m-d" }} to {{ item.end_date|date:"Y-m-d" }}</td>
+                        <td>{{ item.rain_sum }} mm</td>
+                        <td>{{ item.precipitation_probability }}%</td>
+                        <td>
+                            {% if item.is_rainy %}
+                                <span class="badge badge-rain">🌧️ Rain</span>
+                            {% else %}
+                                <span class="badge badge-clear">☀️ Clear</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-muted">{{ item.created_at|date:"Y-m-d H:i:s" }}</td>
+                    </tr>
+                {% empty %}
+                    <tr id="noHistoryRow">
+                        <td colspan="7" class="text-center text-muted">No prediction history yet. Perform your first prediction!</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+    // Autofill default dates
+    const today = new Date().toISOString().split('T')[0];
+    document.getElementById('startDate').value = today;
+
+    const future = new Date();
+    future.setDate(future.getDate() + 3);
+    document.getElementById('endDate').value = future.toISOString().split('T')[0];
+
+    // Form Submission with AJAX
+    document.getElementById('predictionForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        const errorAlert = document.getElementById('errorAlert');
+        const resultsSection = document.getElementById('resultsSection');
+        const loadingState = document.getElementById('loadingState');
+        const initialState = document.getElementById('initialState');
+        
+        errorAlert.classList.add('hidden');
+        resultsSection.classList.add('hidden');
+        initialState.classList.add('hidden');
+        loadingState.classList.remove('hidden');
+
+        const formData = new FormData(this);
+        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+
+        fetch("{% url 'predict_api' %}", {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': csrfToken
+            },
+            body: formData
+        })
+        .then(response => {
+            return response.json().then(data => ({
+                status: response.status,
+                ok: response.ok,
+                body: data
+            }));
+        })
+        .then(res => {
+            loadingState.classList.add('hidden');
+            
+            if (!res.ok) {
+                errorAlert.textContent = res.body.error || 'Meteorological query failed.';
+                errorAlert.classList.remove('hidden');
+                initialState.classList.remove('hidden');
+            } else {
+                const result = res.body.data;
+                
+                // Populate prediction values
+                document.getElementById('resLocation').textContent = result.location;
+                document.getElementById('resCoords').textContent = `${result.latitude.toFixed(4)}°, ${result.longitude.toFixed(4)}°`;
+                document.getElementById('resDates').textContent = `${result.start_date} to ${result.end_date}`;
+                document.getElementById('resRainSum').textContent = `${result.rain_sum} mm`;
+                document.getElementById('resProb').textContent = `${result.precipitation_probability}%`;
+                
+                const statusBadge = document.getElementById('resStatus');
+                if (result.is_rainy) {
+                    statusBadge.textContent = '🌧️ Rain Predicted';
+                    statusBadge.className = 'badge badge-rain';
+                } else {
+                    statusBadge.textContent = '☀️ No Rain Expected';
+                    statusBadge.className = 'badge badge-clear';
+                }
+                
+                resultsSection.classList.remove('hidden');
+                
+                // Add new entry to the top of the history table
+                const historyBody = document.getElementById('historyBody');
+                const noHistory = document.getElementById('noHistoryRow');
+                if (noHistory) {
+                    noHistory.remove();
+                }
+                
+                const newRow = document.createElement('tr');
+                newRow.innerHTML = `
+                    <td>${result.location}</td>
+                    <td>${result.latitude.toFixed(4)}°, ${result.longitude.toFixed(4)}°</td>
+                    <td>${result.start_date} to ${result.end_date}</td>
+                    <td>${result.rain_sum} mm</td>
+                    <td>${result.precipitation_probability}%</td>
+                    <td>
+                        <span class="badge ${result.is_rainy ? 'badge-rain' : 'badge-clear'}">
+                            ${result.is_rainy ? '🌧️ Rain' : '☀️ Clear'}
+                        </span>
+                    </td>
+                    <td class="text-muted">${result.created_at}</td>
+                `;
+                
+                historyBody.insertBefore(newRow, historyBody.firstChild);
+            }
+        })
+        .catch(err => {
+            loadingState.classList.add('hidden');
+            initialState.classList.remove('hidden');
+            errorAlert.textContent = 'Could not establish connection to prediction server.';
+            errorAlert.classList.remove('hidden');
+        });
+    });
+</script>
+{% endblock %}

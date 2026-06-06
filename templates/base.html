@@ -1,0 +1,47 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}RainCast - Premium Rain Prediction{% endblock %}</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="{% static 'css/styles.css' %}">
+    {% block extra_head %}{% endblock %}
+</head>
+<body>
+    <div class="app-container">
+        <header class="app-header">
+            <div class="logo-area">
+                <span class="logo-icon">🌧️</span>
+                <span class="logo-text">RainCast</span>
+            </div>
+            <nav class="app-nav">
+                {% if user.is_authenticated %}
+                    <span class="user-greeting">Welcome, <strong>{{ user.username }}</strong></span>
+                    <a href="{% url 'dashboard' %}" class="nav-link">Dashboard</a>
+                    <form action="{% url 'logout' %}" method="post" style="display: inline;">
+                        {% csrf_token %}
+                        <button type="submit" class="nav-link nav-btn">Logout</button>
+                    </form>
+                {% else %}
+                    <a href="{% url 'login' %}" class="nav-link">Login</a>
+                    <a href="{% url 'signup' %}" class="nav-link highlight">Sign Up</a>
+                {% endif %}
+            </nav>
+        </header>
+
+        <main class="main-content">
+            {% block content %}{% endblock %}
+        </main>
+
+        <footer class="app-footer">
+            <p>&copy; 2026 RainCast. All rights reserved.</p>
+        </footer>
+    </div>
+</body>
+</html>

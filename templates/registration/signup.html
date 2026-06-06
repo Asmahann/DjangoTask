@@ -1,0 +1,51 @@
+{% extends 'base.html' %}
+
+{% block title %}Create Account - RainCast{% endblock %}
+
+{% block content %}
+<div class="auth-wrapper">
+    <div class="auth-card">
+        <h2>Create Account</h2>
+        <p class="auth-subtitle">Join us to access live rain predictions and history</p>
+        
+        {% if form.errors %}
+            <div class="alert alert-error">
+                {% for field in form %}
+                    {% for error in field.errors %}
+                        <p><strong>{{ field.label }}</strong>: {{ error }}</p>
+                    {% endfor %}
+                {% endfor %}
+                {% for error in form.non_field_errors %}
+                    <p>{{ error }}</p>
+                {% endfor %}
+            </div>
+        {% endif %}
+        
+        <form method="post" action="{% url 'signup' %}" class="auth-form">
+            {% csrf_token %}
+            
+            {% for field in form %}
+                <div class="form-group">
+                    <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+                    <!-- Check if input type should be password -->
+                    <input type="{% if 'password' in field.html_name %}password{% elif field.html_name == 'email' %}email{% else %}text{% endif %}" 
+                           name="{{ field.html_name }}" 
+                           id="{{ field.id_for_label }}" 
+                           required 
+                           placeholder="Enter {{ field.label|lower }}" 
+                           class="form-input">
+                    {% if field.help_text %}
+                        <span class="form-help">{{ field.help_text|safe }}</span>
+                    {% endif %}
+                </div>
+            {% endfor %}
+            
+            <button type="submit" class="btn btn-primary btn-block">Register</button>
+        </form>
+        
+        <div class="auth-footer">
+            <p>Already have an account? <a href="{% url 'login' %}">Log in here</a></p>
+        </div>
+    </div>
+</div>
+{% endblock %}
