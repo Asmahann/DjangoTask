@@ -8,6 +8,7 @@ from django.contrib.auth import authenticate
 from .models import PredictionQuery
 from .services import WeatherService
 from datetime import datetime
+from django.utils import timezone
 import json
 import base64
 
@@ -142,7 +143,7 @@ class PredictionAPIView(View):
                     'rain_sum': query_record.rain_sum,
                     'precipitation_probability': query_record.precipitation_probability,
                     'is_rainy': query_record.is_rainy,
-                    'created_at': query_record.created_at.strftime('%Y-%m-%d %H:%M:%S')
+                    'created_at': timezone.localtime(query_record.created_at).strftime('%Y-%m-%d %H:%M:%S')
                 }
             })
 
