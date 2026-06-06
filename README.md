@@ -84,8 +84,8 @@ All requests targeting authentication pages or prediction endpoints are protecte
 ### 3. Prediction API View
 - **Endpoint**: `/api/predict/`
 - **Method**: `POST`
-- **Content-Type**: `application/json` (or standard form data)
-- **Authentication**: Session cookie required (User must be logged in)
+- **Content-Type**: `application/json`
+- **Authentication**: HTTP Basic Auth (username & password) — no CSRF token required
 
 #### JSON Request Payload (Input)
 ```json
@@ -110,8 +110,41 @@ All requests targeting authentication pages or prediction endpoints are protecte
     "rain_sum": 1.25,
     "precipitation_probability": 40.0,
     "is_rainy": true,
-    "created_at": "2026-06-06 12:35:00"
+    "created_at": "2026-06-06 17:35:00"
   }
+}
+```
+
+> **Note**: `created_at` is returned in the server's local timezone (`Asia/Karachi`, UTC+5).
+
+---
+
+## Testing Endpoints with Postman
+
+The `/api/predict/` endpoint uses **HTTP Basic Auth** — no CSRF tokens or session cookies needed.
+
+### 1. Create an Account
+Sign up at [http://localhost:8000/accounts/signup/](http://localhost:8000/accounts/signup/) to get credentials.
+
+### 2. Call the Prediction API
+Open Postman and configure the request as follows:
+
+| Field | Value |
+|---|---|
+| Method | `POST` |
+| URL | `http://localhost:8000/api/predict/` |
+
+**Authorization tab:**
+- Type: `Basic Auth`
+- Username: `your_username`
+- Password: `your_password`
+
+**Body tab → raw → JSON:**
+```json
+{
+  "location": "Tokyo",
+  "start_date": "2026-06-06",
+  "end_date": "2026-06-09"
 }
 ```
 
@@ -119,42 +152,11 @@ All requests targeting authentication pages or prediction endpoints are protecte
 
 ## Testing Endpoints with CURL
 
-Django incorporates CSRF (Cross-Site Request Forgery) protection by default on POST routes. To test the API endpoints using Curl, you must extract and provide the CSRF tokens and persist session cookies.
+Use Basic Auth directly in the curl command — no cookie or CSRF setup required:
 
-Follow this sequential procedure:
-
-### 1. Retrieve the CSRF Token and Init Cookies
-Fetch the login page to initialize a `cookies.txt` file containing the CSRF token:
 ```bash
-curl -c cookies.txt http://localhost:8000/accounts/login/
-```
-
-### 2. Login to Authenticate the Session
-Extract the CSRF token from the saved cookie file and submit the login credentials. This updates `cookies.txt` with your authenticated session:
-```bash
-# 1. Extract the token value from the cookies
-CSRF_TOKEN=$(grep csrftoken cookies.txt | awk '{print $7}')
-
-# 2. POST the login credentials along with the CSRF token
-curl -b cookies.txt -c cookies.txt \
-  -d "username=your_username" \
-  -d "password=your_password" \
-  -d "csrfmiddlewaretoken=$CSRF_TOKEN" \
-  -H "Referer: http://localhost:8000/accounts/login/" \
-  http://localhost:8000/accounts/login/
-```
-
-### 3. Execute the Weather Prediction API Call
-Use the authenticated session cookie and fresh CSRF token to call the prediction endpoint:
-```bash
-# 1. Retrieve the updated CSRF token
-CSRF_TOKEN=$(grep csrftoken cookies.txt | awk '{print $7}')
-
-# 2. Call the prediction API with location and date parameters
-curl -b cookies.txt \
+curl -u your_username:your_password \
   -H "Content-Type: application/json" \
-  -H "X-CSRFToken: $CSRF_TOKEN" \
-  -H "Referer: http://localhost:8000/" \
   -d '{"location": "Tokyo", "start_date": "2026-06-06", "end_date": "2026-06-09"}' \
   http://localhost:8000/api/predict/
 ```
